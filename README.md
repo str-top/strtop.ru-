@@ -1,2 +1,2 @@
 # strtop.ru
-asdf
+a
