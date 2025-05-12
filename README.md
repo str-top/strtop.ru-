@@ -1,2 +1,2 @@
 # strtop.ru
-hi, people
+hello
