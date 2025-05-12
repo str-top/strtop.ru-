@@ -1,2 +1,2 @@
 # strtop.ru
-hello, everyone
+hello, ever
