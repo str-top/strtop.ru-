@@ -20,3 +20,5 @@ jobs:
           script: |
             cd /var/www/student-votes/frontend/src
             git pull
+            npm install
+            npm run build
