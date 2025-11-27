@@ -1,0 +1,13 @@
+name: Lesson Task Analysis
+
+on:
+  push:
+    paths:
+      - "lessons/**/homework/**"
+      - "lessons/**/tasks/**"
+
+jobs:
+  analyze:
+    uses: Pau1R/python2026/.github/workflows/task_analysis.yml@main
+    with:
+      base_sha: ${{ github.event.before }}
