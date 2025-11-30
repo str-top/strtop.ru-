@@ -8,6 +8,8 @@ on:
 
 jobs:
   analyze:
+    permissions:
+      contents: write
     uses: Pau1R/python2026/.github/workflows/task_analysis.yml@main
     with:
       base_sha: ${{ github.event.before }}   # optional
