@@ -1,0 +1,1 @@
+print('multipliation table')
