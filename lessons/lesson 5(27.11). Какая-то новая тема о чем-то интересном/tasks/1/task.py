@@ -1,14 +1,25 @@
+def split_control_params(params):
+    timeout = params.get("timeout", 5)
+    retries = params.get("retries", 3)
+
+    payload = {
+        k: v
+        for k, v in params.items()
+        if k not in {"endpoint", "timeout", "retries"}
+    }
+
+    return {"timeout": timeout, "retries": retries}, payload
+
+
 def prepare_request(**kwargs):
-   endpoint = kwargs.get('endpoint', '')
-   if not endpoint:
-      raise ValueError("endpoint is required")
+    if "endpoint" not in kwargs:
+        raise ValueError("endpoint is required")
 
-   control = {key: value for key, value in kwargs.items() if key in ['timeout', 'retries']}
+    endpoint = kwargs["endpoint"]
+    control, payload = split_control_params(kwargs)
 
-   return {
-      "endpoint": endpoint,
-      "control": control,
-      "payload": {"data": kwargs["data"]}
-   }
-
-print(prepare_request(endpoint="/stats", data=[1, 2]))
+    return {
+        "endpoint": endpoint,
+        "control": control,
+        "payload": payload,
+    }
