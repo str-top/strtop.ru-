@@ -36,7 +36,7 @@ jobs:
             
             const variables = {
               discussionId: context.payload.discussion.node_id,
-              body: `<!-- Placeholder comment -->`
+              body: `<!-- Original comment content -->\n\n${context.payload.comment ? context.payload.comment.body : context.payload.discussion.body}`
             };
             
             await github.graphql(query, variables);
