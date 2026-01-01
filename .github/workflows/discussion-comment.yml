@@ -16,27 +16,149 @@ jobs:
       pull-requests: read
       issues: read
       contents: read
+      actions: read
       
     steps:
-      - name: Add comment to discussion
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Download previous comments
+        uses: actions/download-artifact@v4
+        with:
+          name: discussion-comments
+          path: ./comments
+        continue-on-error: true
+        
+      - name: Process comment
         uses: actions/github-script@v7
         with:
           script: |
-            const query = `
-              mutation AddDiscussionComment($discussionId: ID!, $body: String!) {
-                addDiscussionComment(input: {discussionId: $discussionId, body: $body}) {
-                  comment {
-                    id
-                    databaseId
-                    body
+            const fs = require('fs');
+            const path = require('path');
+            
+            const commentsDir = path.join(process.cwd(), 'comments');
+            if (!fs.existsSync(commentsDir)) {
+              fs.mkdirSync(commentsDir, { recursive: true });
+            }
+            
+            const trackingPath = path.join(commentsDir, 'tracking.json');
+            let tracking = {};
+            if (fs.existsSync(trackingPath)) {
+              tracking = JSON.parse(fs.readFileSync(trackingPath, 'utf8'));
+            }
+            
+            const isCommentEvent = context.eventName === 'discussion_comment';
+            const subject = isCommentEvent ? context.payload.comment : context.payload.discussion;
+            const itemId = subject.id;
+            const itemNumber = isCommentEvent ? subject.databaseId : subject.number;
+            const currentBody = subject.body;
+            const updatedAt = subject.updated_at;
+            
+            // Restore bot comment only if we already stored the original contents via artifacts
+            const trackedEntry = Object.entries(tracking).find(([, botCommentId]) => botCommentId === itemId);
+            if (trackedEntry) {
+              const [originalId] = trackedEntry;
+              const storedOriginalPath = path.join(commentsDir, `${originalId}.json`);
+              
+              if (fs.existsSync(storedOriginalPath)) {
+                const storedData = JSON.parse(fs.readFileSync(storedOriginalPath, 'utf8'));
+                const restoreQuery = `
+                  mutation UpdateDiscussionComment($commentId: ID!, $body: String!) {
+                    updateDiscussionComment(input: {commentId: $commentId, body: $body}) {
+                      comment {
+                        id
+                        databaseId
+                        body
+                      }
+                    }
+                  }
+                `;
+                
+                const restoreBody = `<!-- Restored by bot after unauthorized edit | Original Comment ID: ${storedData.number} -->\n\n${storedData.body}`;
+                await github.graphql(restoreQuery, { commentId: itemId, body: restoreBody });
+                console.log('Restored tracked bot comment from stored artifacts');
+              } else {
+                console.log('Tracked bot comment edited but no stored artifact was found. Skipping restore.');
+              }
+              
+              return;
+            }
+            
+            const snapshotPath = path.join(commentsDir, `${itemId}.json`);
+            const snapshotExistedBefore = fs.existsSync(snapshotPath);
+            let previousBody = null;
+            
+            if (snapshotExistedBefore) {
+              const previousData = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+              previousBody = previousData.body;
+            }
+            
+            // Always store the latest version for future artifact downloads
+            fs.writeFileSync(snapshotPath, JSON.stringify({
+              id: itemId,
+              number: itemNumber,
+              body: currentBody,
+              updated_at: updatedAt,
+              edited_by: context.actor
+            }, null, 2));
+            
+            const contentChanged = previousBody === null ? true : previousBody !== currentBody;
+            if (!contentChanged) {
+              console.log('Comment content unchanged, skipping bot reply update.');
+              return;
+            }
+            
+            // Only restore contents if they were previously stored in artifacts
+            const commentBody = snapshotExistedBefore
+              ? `<!-- Restored previous version by @${context.actor} | Comment ID: ${itemNumber} -->\n\n${previousBody}`
+              : `<!-- Edited by @${context.actor} | Comment ID: ${itemNumber} -->\n\n${currentBody}`;
+            
+            if (tracking[itemId]) {
+              const updateQuery = `
+                mutation UpdateDiscussionComment($commentId: ID!, $body: String!) {
+                  updateDiscussionComment(input: {commentId: $commentId, body: $body}) {
+                    comment {
+                      id
+                      databaseId
+                      body
+                    }
                   }
                 }
-              }
-            `;
+              `;
+              
+              await github.graphql(updateQuery, {
+                commentId: tracking[itemId],
+                body: commentBody
+              });
+              
+              console.log('Updated existing bot comment with stored contents.');
+            } else {
+              const createQuery = `
+                mutation AddDiscussionComment($discussionId: ID!, $body: String!) {
+                  addDiscussionComment(input: {discussionId: $discussionId, body: $body}) {
+                    comment {
+                      id
+                      databaseId
+                      body
+                    }
+                  }
+                }
+              `;
+              
+              const result = await github.graphql(createQuery, {
+                discussionId: context.payload.discussion.node_id,
+                body: commentBody
+              });
+              
+              tracking[itemId] = result.data.addDiscussionComment.comment.id;
+              console.log('Created bot comment for this discussion item and stored it in artifacts.');
+            }
             
-            const variables = {
-              discussionId: context.payload.discussion.node_id,
-              body: `<!-- Edited by @${context.actor} | Comment ID: ${context.payload.comment ? context.payload.comment.id : context.payload.discussion.id} -->\n\n${context.payload.comment ? context.payload.comment.body : context.payload.discussion.body}`
-            };
+            fs.writeFileSync(trackingPath, JSON.stringify(tracking, null, 2));
             
-            await github.graphql(query, variables);
+      - name: Upload comments as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: discussion-comments
+          path: ./comments
+          retention-days: 30
