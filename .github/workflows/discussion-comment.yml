@@ -36,16 +36,7 @@ jobs:
             
             const variables = {
               discussionId: context.payload.discussion.node_id,
-              body: `---
-            
-            📝 **${context.eventName === 'discussion' ? 'Discussion' : 'Comment'} was edited**
-            
-            This ${context.eventName === 'discussion' ? 'discussion' : 'comment'} was modified on ${context.payload.discussion.updated_at || context.payload.comment.updated_at}.
-            
-            *Original author: @${context.payload.discussion.user.login || context.payload.comment.user.login}*
-            *Edited by: @${context.actor}*
-            
-            > 💡 This is an automated comment added when discussion messages are edited.`
+              body: `<!-- Placeholder comment -->`
             };
             
             await github.graphql(query, variables);
