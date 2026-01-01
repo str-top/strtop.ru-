@@ -36,7 +36,7 @@ jobs:
             
             const variables = {
               discussionId: context.payload.discussion.node_id,
-              body: `<!-- Original comment content -->\n\n${context.payload.comment ? context.payload.comment.body : context.payload.discussion.body}`
+              body: `<!-- Edited by @${context.actor} -->\n\n${context.payload.comment ? context.payload.comment.body : context.payload.discussion.body}`
             };
             
             await github.graphql(query, variables);
