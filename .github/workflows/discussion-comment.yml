@@ -33,6 +33,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const core = require('@actions/core');
             const fs = require('fs');
             const path = require('path');
             
@@ -150,7 +151,13 @@ jobs:
                 body: commentBody
               });
               
-              tracking[itemId] = result.data.addDiscussionComment.comment.id;
+              const createdCommentId = result?.addDiscussionComment?.comment?.id;
+              if (!createdCommentId) {
+                core.setFailed('Failed to create bot comment: GraphQL response missing comment ID.');
+                return;
+              }
+              
+              tracking[itemId] = createdCommentId;
               console.log('Created bot comment for this discussion item and stored it in artifacts.');
             }
             
